@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 
 type DownloadResult = { path: string; message: string };
 type AuthInfo = { signed_in: boolean; email: string | null };
+type SizeEstimate = { bytes: number; label: string; approximate: boolean };
 
 const VIDEO_QUALITIES = [
   { id: "360", label: "360p" },
@@ -21,6 +22,8 @@ const AUDIO_QUALITIES = [
 
 let audioOnly = false;
 let busy = false;
+let estimateTimer: number | undefined;
+let estimateSeq = 0;
 const SAVE_KEY = "ytube-save-dir";
 
 function setStatus(text: string, kind: "ok" | "err" | "" = "") {
@@ -28,6 +31,13 @@ function setStatus(text: string, kind: "ok" | "err" | "" = "") {
   if (!el) return;
   el.textContent = text;
   el.className = `status${kind ? ` ${kind}` : ""}`;
+}
+
+function setEstimate(text: string, kind: "ready" | "err" | "" = "") {
+  const el = document.querySelector("#size-estimate");
+  if (!el) return;
+  el.textContent = text;
+  el.className = `estimate${kind ? ` ${kind}` : ""}`;
 }
 
 function fillQuality() {
@@ -101,6 +111,43 @@ async function pickFolder() {
   }
 }
 
+function scheduleEstimate() {
+  window.clearTimeout(estimateTimer);
+  estimateTimer = window.setTimeout(() => {
+    void refreshEstimate();
+  }, 550);
+}
+
+async function refreshEstimate() {
+  const input = document.querySelector<HTMLInputElement>("#url");
+  const quality = document.querySelector<HTMLSelectElement>("#quality");
+  const url = (input?.value || "").trim();
+  if (!url) {
+    setEstimate("");
+    return;
+  }
+  if (!url.includes("youtube.com") && !url.includes("youtu.be")) {
+    setEstimate("Paste a valid YouTube link to estimate size.", "err");
+    return;
+  }
+
+  const seq = ++estimateSeq;
+  setEstimate("Estimating file size…");
+  try {
+    const result = await invoke<SizeEstimate>("estimate_download_size", {
+      url,
+      audioOnly,
+      quality: quality?.value || (audioOnly ? "192" : "720"),
+    });
+    if (seq !== estimateSeq) return;
+    setEstimate(`Estimated size: ${result.label}`, "ready");
+  } catch (err) {
+    if (seq !== estimateSeq) return;
+    const msg = String(err);
+    setEstimate(msg.split("\n")[0] || "Size estimate unavailable.", "err");
+  }
+}
+
 async function runDownload() {
   if (busy) return;
   const input = document.querySelector<HTMLInputElement>("#url");
@@ -151,13 +198,17 @@ window.addEventListener("DOMContentLoaded", () => {
     mp4.classList.add("on");
     mp3?.classList.remove("on");
     fillQuality();
+    scheduleEstimate();
   });
   mp3?.addEventListener("click", () => {
     audioOnly = true;
     mp3.classList.add("on");
     mp4?.classList.remove("on");
     fillQuality();
+    scheduleEstimate();
   });
+  document.querySelector("#quality")?.addEventListener("change", () => scheduleEstimate());
+  document.querySelector("#url")?.addEventListener("input", () => scheduleEstimate());
   document.querySelector("#run")?.addEventListener("click", () => void runDownload());
   document.querySelector("#cancel")?.addEventListener("click", () => void cancelDownload());
   document.querySelector("#pick-folder")?.addEventListener("click", () => void pickFolder());

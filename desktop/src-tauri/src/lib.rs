@@ -108,6 +108,233 @@ fn audio_quality_arg(quality: &str) -> &'static str {
     }
 }
 
+fn audio_bitrate_kbps(quality: &str) -> u64 {
+    match quality {
+        "128" => 128,
+        "256" => 256,
+        "320" => 320,
+        _ => 192,
+    }
+}
+
+fn video_height_cap(quality: &str) -> Option<u64> {
+    match quality {
+        "360" => Some(360),
+        "480" => Some(480),
+        "1080" => Some(1080),
+        "best" => None,
+        _ => Some(720),
+    }
+}
+
+fn format_bytes(n: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
+    const GB: f64 = MB * 1024.0;
+    let v = n as f64;
+    if v >= GB {
+        format!("{:.2} GB", v / GB)
+    } else if v >= MB {
+        format!("{:.1} MB", v / MB)
+    } else if v >= KB {
+        format!("{:.0} KB", v / KB)
+    } else {
+        format!("{n} B")
+    }
+}
+
+fn bytes_from_format(fmt: &serde_json::Value, duration: Option<f64>) -> Option<u64> {
+    if let Some(n) = fmt.get("filesize").and_then(|v| v.as_u64()) {
+        if n > 0 {
+            return Some(n);
+        }
+    }
+    if let Some(n) = fmt.get("filesize_approx").and_then(|v| v.as_u64()) {
+        if n > 0 {
+            return Some(n);
+        }
+    }
+    let tbr = fmt
+        .get("tbr")
+        .and_then(|v| v.as_f64())
+        .filter(|b| *b > 0.0)
+        .or_else(|| fmt.get("abr").and_then(|v| v.as_f64()).filter(|b| *b > 0.0))
+        .or_else(|| fmt.get("vbr").and_then(|v| v.as_f64()).filter(|b| *b > 0.0))?;
+    let dur = duration.filter(|d| *d > 0.0)?;
+    // tbr is kbps → bytes ≈ seconds * kbps * 1000 / 8
+    Some((dur * tbr * 125.0).round() as u64)
+}
+
+fn pick_video_format<'a>(
+    formats: &'a [serde_json::Value],
+    max_height: Option<u64>,
+) -> Option<&'a serde_json::Value> {
+    let mut best: Option<(&serde_json::Value, u64, f64)> = None;
+    for fmt in formats {
+        let vcodec = fmt.get("vcodec").and_then(|v| v.as_str()).unwrap_or("none");
+        if vcodec == "none" || vcodec == "images" {
+            continue;
+        }
+        let ext = fmt.get("ext").and_then(|v| v.as_str()).unwrap_or("");
+        if ext == "mhtml" {
+            continue;
+        }
+        let height = fmt.get("height").and_then(|v| v.as_u64()).unwrap_or(0);
+        if let Some(cap) = max_height {
+            if height == 0 || height > cap {
+                continue;
+            }
+        }
+        let tbr = fmt.get("tbr").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let score_h = height;
+        let better = match best {
+            None => true,
+            Some((_, bh, bt)) => score_h > bh || (score_h == bh && tbr > bt),
+        };
+        if better {
+            best = Some((fmt, score_h, tbr));
+        }
+    }
+    best.map(|(f, _, _)| f)
+}
+
+fn pick_audio_format<'a>(formats: &'a [serde_json::Value]) -> Option<&'a serde_json::Value> {
+    let mut best: Option<(&serde_json::Value, f64)> = None;
+    for fmt in formats {
+        let acodec = fmt.get("acodec").and_then(|v| v.as_str()).unwrap_or("none");
+        let vcodec = fmt.get("vcodec").and_then(|v| v.as_str()).unwrap_or("none");
+        if acodec == "none" || vcodec != "none" {
+            continue;
+        }
+        let abr = fmt
+            .get("abr")
+            .and_then(|v| v.as_f64())
+            .or_else(|| fmt.get("tbr").and_then(|v| v.as_f64()))
+            .unwrap_or(0.0);
+        let better = match best {
+            None => true,
+            Some((_, b)) => abr > b,
+        };
+        if better {
+            best = Some((fmt, abr));
+        }
+    }
+    best.map(|(f, _)| f)
+}
+
+#[derive(Serialize)]
+struct SizeEstimate {
+    bytes: u64,
+    label: String,
+    approximate: bool,
+}
+
+fn estimate_from_info(
+    info: &serde_json::Value,
+    audio_only: bool,
+    quality: &str,
+) -> Result<SizeEstimate, String> {
+    let duration = info.get("duration").and_then(|v| v.as_f64());
+    if audio_only {
+        let dur = duration.ok_or_else(|| "Could not read video duration.".to_string())?;
+        let kbps = audio_bitrate_kbps(quality);
+        let bytes = (dur * kbps as f64 * 125.0).round() as u64;
+        return Ok(SizeEstimate {
+            bytes,
+            label: format!("~{}", format_bytes(bytes)),
+            approximate: true,
+        });
+    }
+
+    let formats = info
+        .get("formats")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "No format list from yt-dlp.".to_string())?;
+
+    let max_h = video_height_cap(quality);
+    let video = pick_video_format(formats, max_h)
+        .ok_or_else(|| "No matching video format for that quality.".to_string())?;
+    let audio = pick_audio_format(formats);
+
+    let mut total = 0u64;
+    let mut approx = false;
+    let mut any = false;
+
+    if let Some(n) = bytes_from_format(video, duration) {
+        total += n;
+        any = true;
+        if video.get("filesize").and_then(|v| v.as_u64()).unwrap_or(0) == 0 {
+            approx = true;
+        }
+    }
+    if let Some(a) = audio {
+        if let Some(n) = bytes_from_format(a, duration) {
+            total += n;
+            any = true;
+            if a.get("filesize").and_then(|v| v.as_u64()).unwrap_or(0) == 0 {
+                approx = true;
+            }
+        }
+    } else if let Some(n) = bytes_from_format(video, duration) {
+        // progressive (video+audio in one) already counted
+        let _ = n;
+    }
+
+    if !any || total == 0 {
+        return Err("Size not available for this quality.".into());
+    }
+
+    let label = if approx {
+        format!("~{}", format_bytes(total))
+    } else {
+        format_bytes(total)
+    };
+    Ok(SizeEstimate {
+        bytes: total,
+        label,
+        approximate: approx,
+    })
+}
+
+#[tauri::command]
+fn estimate_download_size(
+    url: String,
+    audio_only: bool,
+    quality: String,
+) -> Result<SizeEstimate, String> {
+    let url = url.trim().to_string();
+    if url.is_empty() {
+        return Err("Paste a YouTube URL.".into());
+    }
+    if !url.contains("youtube.com") && !url.contains("youtu.be") {
+        return Err("URL must be a YouTube link.".into());
+    }
+
+    let yt = ensure_yt_dlp()?;
+    let output = Command::new(&yt)
+        .args([
+            "--no-playlist",
+            "--skip-download",
+            "--no-warnings",
+            "--no-color",
+            "-J",
+            &url,
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| format!("Failed to probe video: {e}"))?;
+
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Could not read video info:\n{err}"));
+    }
+
+    let info: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("Bad yt-dlp JSON: {e}"))?;
+    estimate_from_info(&info, audio_only, quality.trim())
+}
+
 fn read_pipe(child: &mut Child) -> (String, String) {
     let mut stdout = String::new();
     let mut stderr = String::new();
@@ -295,6 +522,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             download_youtube,
             cancel_download,
+            estimate_download_size,
             get_auth,
             sign_in,
             sign_out
