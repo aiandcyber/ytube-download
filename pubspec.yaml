@@ -1,0 +1,26 @@
+name: ytube_download
+description: YouTube MP4 and MP3 on this device. No server.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  youtube_explode_dart: ^2.3.4
+  path_provider: ^2.1.5
+  path: ^1.9.0
+  archive: ^4.0.7
+  crypto: ^3.0.6
+  http: ^1.2.2
+  shared_preferences: ^2.3.3
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

@@ -1,0 +1,13 @@
+FFmpeg is required.
+
+Android APK: FFmpegKit audio (com.antonkarpenko:ffmpeg-kit-audio:2.2.3, FFmpeg 8.1.2)
+  License: LGPL-3.0
+  Includes libmp3lame (MP3 encode). Bundled in the APK. Not downloaded after install.
+
+Windows: FFmpeg 9.0.2 essentials, downloaded on first launch from
+  https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip
+  Extracts ffmpeg.exe, ffplay.exe, and ffprobe.exe.
+  License: GPLv3 (Gyan essentials builds). Stored under the app AppData ffmpeg folder.
+  SHA-256: 60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba
+
+Android Play: FFmpegKit does not ship the ffplay SDL player. Play uses the system video/audio player.
