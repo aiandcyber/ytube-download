@@ -23,39 +23,24 @@ In Auth0 → Applications → Tools SPA (or a Native app), add Allowed Callback 
 
 Also add Allowed Logout / Origins for `http://127.0.0.1:54821` if Auth0 asks.
 
-## Test on your Windows laptop (local)
+## Get a Windows EXE (no Flutter commands on your PC)
 
-Needs **Flutter for Windows** + **Visual Studio 2022** “Desktop development with C++”. Build on Windows, not WSL.
+This environment cannot build a `.exe` (needs Windows + Visual Studio). Use **GitHub Actions** instead:
 
-```
-# Copy or clone this folder onto Windows, then in PowerShell:
-cd C:\path\to\ytube-download
-flutter pub get
-flutter run -d windows
-```
+1. Push this repo to your **personal** GitHub.
+2. Open **Actions** → workflow **Build Windows EXE** → wait until green.
+3. Download the artifact **`ytube-download-windows`** (a zip).
+4. Unzip → double-click **`ytube_download.exe`**.
 
-Release EXE:
+That folder is what you later upload to the **distribution** GitHub account Releases for website users.
 
-```
-flutter build windows
-# → build\windows\x64\runner\Release\ytube_download.exe
-```
+Auth0 callback (for Sign in after the free first download):
 
-Against **local** Tools API (optional):
+`http://127.0.0.1:54821/callback`
 
-```
-flutter run -d windows --dart-define=API_BASE=http://127.0.0.1:8000
-```
+### Is an EXE ready right now?
 
-(Requires entitlement.dart to read API_BASE — default is production `https://api.tools.ai-forall.org`.)
-
-### Is it ready to test?
-
-**Yes for download on Windows** after `flutter run -d windows` (first free download works without Sign in).
-
-**Sign in / Free-Premium after first download** needs Auth0 callback URL added (above) and the Tools API reachable.
-
-**Website “Download for Windows”** is **not** ready until you upload a Release zip on the distribution GitHub account.
+**Not in this folder yet** — no Release binary has been built. After you push and the Action finishes, you will have a double-click EXE.
 
 ## Mac
 

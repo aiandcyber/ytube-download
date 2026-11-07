@@ -1,0 +1,44 @@
+# Produces a double-clickable Windows build (no local Flutter needed).
+# After push: GitHub → Actions → download "ytube-download-windows" artifact zip.
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build release
+        run: flutter build windows --release
+
+      - name: Stage portable folder
+        shell: pwsh
+        run: |
+          $src = "build\windows\x64\runner\Release"
+          $dst = "dist\ytube-download-windows"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item -Path "$src\*" -Destination $dst -Recurse -Force
+          Copy-Item -Path "DISTRIBUTION_README.md" -Destination "$dst\README.md" -Force -ErrorAction SilentlyContinue
+
+      - name: Upload EXE folder
+        uses: actions/upload-artifact@v4
+        with:
+          name: ytube-download-windows
+          path: dist/ytube-download-windows
+          if-no-files-found: error
