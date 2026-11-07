@@ -14,11 +14,12 @@ Product rules (Tools Feature List, 2026-11-07):
 
 Do **not** put installers on paid GCP buckets if egress costs matter.
 
-Prefer **GitHub Releases** (free for public binaries):
+Prefer **GitHub Releases** on a **dedicated GitHub account** (not a personal Tools account):
 
-1. Create repo `aiandcyber/ytube-download` (or private + release assets).
-2. Upload `ytube-download-windows.zip` / `ytube-download-macos.dmg` + `SHA256SUMS`.
-3. Tools website links: `https://github.com/aiandcyber/ytube-download/releases`
+1. Create a new GitHub account/org for distribution only.
+2. Create repo `<new-account>/ytube-download`.
+3. Upload `ytube-download-windows.zip` / `ytube-download-macos.zip` + `SHA256SUMS`.
+4. Set Tools SPA env: `VITE_YOUTUBE_DESKTOP_RELEASES_URL=https://github.com/<new-account>/ytube-download/releases`
 
 Hugging Face file hosting is a backup if GitHub is unsuitable.
 
