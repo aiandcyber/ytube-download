@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 type DownloadResult = { path: string; message: string };
+type AuthInfo = { signed_in: boolean; email: string | null };
 
 let audioOnly = false;
 
@@ -11,16 +12,56 @@ function setStatus(text: string, kind: "ok" | "err" | "" = "") {
   el.className = `status${kind ? ` ${kind}` : ""}`;
 }
 
+function renderAuth(info: AuthInfo) {
+  const label = document.querySelector("#account-label");
+  const btn = document.querySelector<HTMLButtonElement>("#auth-btn");
+  if (label) {
+    label.textContent = info.signed_in
+      ? info.email || "Signed in"
+      : "Not signed in";
+  }
+  if (btn) {
+    btn.textContent = info.signed_in ? "Sign out" : "Sign in";
+  }
+}
+
+async function refreshAuth() {
+  try {
+    const info = await invoke<AuthInfo>("get_auth");
+    renderAuth(info);
+  } catch {
+    renderAuth({ signed_in: false, email: null });
+  }
+}
+
+async function toggleAuth() {
+  const btn = document.querySelector<HTMLButtonElement>("#auth-btn");
+  if (btn) btn.disabled = true;
+  setStatus("");
+  try {
+    const current = await invoke<AuthInfo>("get_auth");
+    const info = current.signed_in
+      ? await invoke<AuthInfo>("sign_out")
+      : await invoke<AuthInfo>("sign_in");
+    renderAuth(info);
+    if (info.signed_in) setStatus("Signed in.", "ok");
+  } catch (err) {
+    setStatus(String(err), "err");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function runDownload() {
   const input = document.querySelector<HTMLInputElement>("#url");
   const btn = document.querySelector<HTMLButtonElement>("#run");
   const url = (input?.value || "").trim();
   if (!url) {
-    setStatus("Paste a YouTube URL.", "err");
+    setStatus("Paste a YouTube link.", "err");
     return;
   }
   if (btn) btn.disabled = true;
-  setStatus("Downloading…");
+  setStatus("Preparing download…");
   try {
     const result = await invoke<DownloadResult>("download_youtube", {
       url,
@@ -48,4 +89,6 @@ window.addEventListener("DOMContentLoaded", () => {
     mp4?.classList.remove("on");
   });
   document.querySelector("#run")?.addEventListener("click", () => void runDownload());
+  document.querySelector("#auth-btn")?.addEventListener("click", () => void toggleAuth());
+  void refreshAuth();
 });

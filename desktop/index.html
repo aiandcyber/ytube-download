@@ -8,31 +8,38 @@
     <script type="module" src="/src/main.ts" defer></script>
   </head>
   <body>
-    <main class="container">
-      <header class="hero">
-        <div class="mark" aria-hidden="true">▶</div>
-        <div>
-          <p class="kicker">Desktop · Windows &amp; Mac</p>
-          <h1>YouTube Download</h1>
-          <p class="lead">
-            We do not support downloading YouTube video on our server. You can download on your
-            personal device for personal listening again.
-          </p>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="logo" aria-hidden="true"></span>
+          <div>
+            <strong>YouTube Download</strong>
+            <span class="sub">AI-forAll Tools</span>
+          </div>
+        </div>
+        <div class="account">
+          <span id="account-label" class="account-label">Not signed in</span>
+          <button type="button" id="auth-btn" class="btn ghost">Sign in</button>
         </div>
       </header>
 
-      <div class="mode" role="group" aria-label="Format">
-        <button type="button" id="mode-mp4" class="chip on">MP4 video</button>
-        <button type="button" id="mode-mp3" class="chip">MP3 audio</button>
-      </div>
+      <main class="panel">
+        <h1>Save a video or audio track</h1>
+        <p class="hint">Files are saved to your Downloads folder on this computer.</p>
 
-      <label class="field">
-        <span>YouTube URL</span>
-        <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=…" />
-      </label>
+        <div class="segment" role="group" aria-label="Format">
+          <button type="button" id="mode-mp4" class="seg on">MP4</button>
+          <button type="button" id="mode-mp3" class="seg">MP3</button>
+        </div>
 
-      <button type="button" id="run" class="primary">Download</button>
-      <p id="status" class="status" role="status"></p>
-    </main>
+        <label class="field">
+          <span>YouTube link</span>
+          <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off" />
+        </label>
+
+        <button type="button" id="run" class="btn primary">Download</button>
+        <p id="status" class="status" role="status"></p>
+      </main>
+    </div>
   </body>
 </html>
