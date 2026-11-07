@@ -5,12 +5,17 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Free/Premium for desktop YouTube via Tools `/api/control/authorize` (`youtube_download`).
-/// First download is free. Login at app start is optional.
+/// First download is free (anon device id). Later downloads require Auth0 access token.
 class Entitlement {
-  Entitlement({this.apiBase = 'https://api.tools.ai-forall.org'});
+  Entitlement({String? apiBase})
+      : apiBase = (apiBase ??
+                const String.fromEnvironment(
+                  'API_BASE',
+                  defaultValue: 'https://api.tools.ai-forall.org',
+                ))
+            .replaceAll(RegExp(r'/$'), '');
 
   final String apiBase;
-  static const _deviceKeyPref = 'youtube_device_key';
   static const _deviceIdPref = 'youtube_device_id';
   static const _localFreeUsed = 'youtube_local_free_used';
 
@@ -22,16 +27,6 @@ class Entitlement {
       await prefs.setString(_deviceIdPref, id);
     }
     return id;
-  }
-
-  Future<String?> deviceKey() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_deviceKeyPref);
-  }
-
-  Future<void> saveDeviceKey(String key) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_deviceKeyPref, key.trim());
   }
 
   Future<bool> localFreeUsed() async {
@@ -47,13 +42,11 @@ class Entitlement {
   /// Returns null if allowed; otherwise an error message for the UI.
   Future<String?> assertMayDownload({String? accessToken}) async {
     final token = (accessToken ?? '').trim();
-    final key = (await deviceKey() ?? '').trim();
     final id = await deviceId();
     final headers = <String, String>{
       'Content-Type': 'application/json',
       'X-Device-Id': id,
       if (token.isNotEmpty) 'Authorization': 'Bearer $token',
-      if (key.isNotEmpty) 'X-Device-Key': key,
     };
     try {
       final uri = Uri.parse('$apiBase/api/control/authorize');
@@ -74,23 +67,22 @@ class Entitlement {
         if (detail is Map && detail['reason'] != null) {
           final reason = '${detail['reason']}';
           if (reason == 'upgrade_required' || reason == 'credits_exhausted') {
-            return 'Further downloads need Premium (or credits). Sign in / paste activation key from Profile.';
+            return 'Further downloads need Premium (or credits). Sign in with Auth0.';
           }
           return 'Download blocked: $reason';
         }
         if (detail is String) return detail;
       } catch (_) {}
       if (res.statusCode == 401 || res.statusCode == 402 || res.statusCode == 403) {
-        return 'Free first download used. Sign in with your Tools account, or paste an activation key from Profile.';
+        return 'Free first download used. Sign in with the same Auth0 account as Tools.';
       }
-      return 'Download blocked (${res.statusCode}). Check login or activation key.';
+      return 'Download blocked (${res.statusCode}). Sign in and try again.';
     } catch (_) {
-      // Offline fallback: one local free download only
       if (!await localFreeUsed()) {
         await markLocalFreeUsed();
         return null;
       }
-      return 'Cannot reach Tools API. Paste an activation key and try again when online.';
+      return 'Cannot reach Tools API. Sign in when online, then try again.';
     }
   }
 }

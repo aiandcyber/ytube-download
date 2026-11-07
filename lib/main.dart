@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'auth0_session.dart';
 import 'downloader.dart';
 import 'entitlement.dart';
 import 'ffmpeg.dart';
@@ -37,9 +38,9 @@ class DownloadPage extends StatefulWidget {
 
 class _DownloadPageState extends State<DownloadPage> {
   final _url = TextEditingController();
-  final _key = TextEditingController();
   final _dl = YtDownloader();
   final _entitlement = Entitlement();
+  final _auth = Auth0Session();
   bool _audio = false;
   String _quality = '720';
   String _title = '';
@@ -48,9 +49,11 @@ class _DownloadPageState extends State<DownloadPage> {
   String _ok = '';
   String _lastFile = '';
   bool _busy = false;
+  bool _authBusy = false;
   double _progress = 0;
   double _ffmpegProgress = 0;
   String _ffmpegError = '';
+
   List<String> get _qualityIds =>
       _audio ? YtDownloader.audioQualities : YtDownloader.videoQualities;
 
@@ -59,14 +62,8 @@ class _DownloadPageState extends State<DownloadPage> {
     super.initState();
     Ffmpeg.status.addListener(_onFfmpeg);
     _setupFfmpeg();
-    _loadEntitlement();
-  }
-
-  Future<void> _loadEntitlement() async {
-    final key = await _entitlement.deviceKey();
-    if (!mounted) return;
-    setState(() {
-      if (key != null && key.isNotEmpty) _key.text = key;
+    _auth.load().then((_) {
+      if (mounted) setState(() {});
     });
   }
 
@@ -90,7 +87,6 @@ class _DownloadPageState extends State<DownloadPage> {
   void dispose() {
     Ffmpeg.status.removeListener(_onFfmpeg);
     _url.dispose();
-    _key.dispose();
     _dl.close();
     super.dispose();
   }
@@ -136,6 +132,25 @@ class _DownloadPageState extends State<DownloadPage> {
     }
   }
 
+  Future<void> _toggleAuth() async {
+    setState(() {
+      _authBusy = true;
+      _error = '';
+    });
+    try {
+      if (_auth.isSignedIn) {
+        await _auth.signOut();
+      } else {
+        await _auth.signIn();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _authBusy = false);
+    }
+  }
+
   Future<void> _run() async {
     if (Platform.isWindows && Ffmpeg.status.value != FfmpegStatus.ready) return;
     final url = _url.text.trim();
@@ -148,9 +163,7 @@ class _DownloadPageState extends State<DownloadPage> {
       _progress = 0;
     });
     try {
-      final typedKey = _key.text.trim();
-      if (typedKey.isNotEmpty) await _entitlement.saveDeviceKey(typedKey);
-      final blocked = await _entitlement.assertMayDownload();
+      final blocked = await _entitlement.assertMayDownload(accessToken: _auth.accessToken);
       if (blocked != null) {
         if (!mounted) return;
         setState(() => _error = blocked);
@@ -197,7 +210,25 @@ class _DownloadPageState extends State<DownloadPage> {
   Widget build(BuildContext context) {
     final ffmpegBusy = Platform.isWindows && Ffmpeg.status.value != FfmpegStatus.ready;
     return Scaffold(
-      appBar: AppBar(title: const Text('YouTube Download')),
+      appBar: AppBar(
+        title: const Text('YouTube Download'),
+        actions: [
+          if (_auth.isSignedIn)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Center(
+                child: Text(
+                  _auth.email ?? 'Signed in',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ),
+          TextButton(
+            onPressed: _authBusy ? null : _toggleAuth,
+            child: Text(_auth.isSignedIn ? 'Sign out' : 'Sign in'),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -222,18 +253,8 @@ class _DownloadPageState extends State<DownloadPage> {
           Text(_audio ? 'Download audio only from a YouTube video as MP3.' : 'Download a YouTube video as MP4.'),
           const SizedBox(height: 8),
           Text(
-            'Windows / Mac desktop only. First download is free; later downloads need a Profile activation key (or Tools login). Login at start is optional.',
+            'Windows / Mac desktop. First download is free (Sign in optional). More downloads need Auth0 Sign in — same account as Tools.',
             style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 8),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _key,
-            decoration: const InputDecoration(
-              labelText: 'Activation key (optional at start)',
-              hintText: 'From Tools Profile → Desktop YouTube activation key',
-              border: OutlineInputBorder(),
-            ),
           ),
           const SizedBox(height: 16),
           TextField(
@@ -288,18 +309,21 @@ class _DownloadPageState extends State<DownloadPage> {
             style: FilledButton.styleFrom(backgroundColor: const Color(0xFFE53935)),
             child: Text(_busy ? 'Working…' : 'Run'),
           ),
-          if (_busy) Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: LinearProgressIndicator(value: _progress > 0 ? _progress : null),
-          ),
-          if (_error.isNotEmpty) Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Text(_error, style: const TextStyle(color: Color(0xFFB91C1C))),
-          ),
-          if (_ok.isNotEmpty) Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Text(_ok, style: const TextStyle(color: Color(0xFF047857))),
-          ),
+          if (_busy)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: LinearProgressIndicator(value: _progress > 0 ? _progress : null),
+            ),
+          if (_error.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(_error, style: const TextStyle(color: Color(0xFFB91C1C))),
+            ),
+          if (_ok.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(_ok, style: const TextStyle(color: Color(0xFF047857))),
+            ),
           if (_lastFile.isNotEmpty && !_busy)
             Padding(
               padding: const EdgeInsets.only(top: 12),
