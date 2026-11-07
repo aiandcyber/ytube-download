@@ -25,19 +25,35 @@
 
       <main class="panel">
         <h1>Save a video or audio track</h1>
-        <p class="hint">Files are saved to your Downloads folder on this computer.</p>
+        <p class="hint">Choose quality and where to save, then download.</p>
 
         <div class="segment" role="group" aria-label="Format">
           <button type="button" id="mode-mp4" class="seg on">MP4</button>
           <button type="button" id="mode-mp3" class="seg">MP3</button>
         </div>
 
+        <label class="field" id="quality-wrap">
+          <span id="quality-label">Video quality</span>
+          <select id="quality"></select>
+        </label>
+
         <label class="field">
           <span>YouTube link</span>
           <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off" />
         </label>
 
-        <button type="button" id="run" class="btn primary">Download</button>
+        <div class="save-row">
+          <label class="field grow">
+            <span>Save folder</span>
+            <input id="save-dir" type="text" readonly placeholder="Downloads (default)" />
+          </label>
+          <button type="button" id="pick-folder" class="btn ghost save-btn">Choose…</button>
+        </div>
+
+        <div class="actions">
+          <button type="button" id="run" class="btn primary">Download</button>
+          <button type="button" id="cancel" class="btn ghost danger hidden">Cancel</button>
+        </div>
         <p id="status" class="status" role="status"></p>
       </main>
     </div>

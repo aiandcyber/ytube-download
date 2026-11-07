@@ -3,12 +3,21 @@ mod auth;
 use auth::{AuthInfo, AuthState};
 use serde::Serialize;
 use std::fs;
+use std::io::Read;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::thread;
+use std::time::Duration;
 use tauri::State;
 
 struct AppAuth(Mutex<AuthState>);
+
+struct DownloadCtl {
+    child: Mutex<Option<Child>>,
+    cancel: AtomicBool,
+}
 
 #[derive(Serialize)]
 struct DownloadResult {
@@ -52,7 +61,7 @@ fn ensure_yt_dlp() -> Result<PathBuf, String> {
     }
 
     let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(180))
+        .timeout(Duration::from_secs(180))
         .build()
         .map_err(|e| e.to_string())?;
     let bytes = client
@@ -74,10 +83,41 @@ fn ensure_yt_dlp() -> Result<PathBuf, String> {
     Ok(local)
 }
 
-fn downloads_dir() -> Result<PathBuf, String> {
+fn default_downloads_dir() -> Result<PathBuf, String> {
     dirs::download_dir()
         .or_else(|| dirs::home_dir().map(|h| h.join("Downloads")))
         .ok_or_else(|| "Could not resolve Downloads folder".to_string())
+}
+
+fn video_format(quality: &str) -> String {
+    match quality {
+        "360" => "bv*[height<=360]+ba/b[height<=360]/b".into(),
+        "480" => "bv*[height<=480]+ba/b[height<=480]/b".into(),
+        "1080" => "bv*[height<=1080]+ba/b[height<=1080]/b".into(),
+        "best" => "bv*+ba/b".into(),
+        _ => "bv*[height<=720]+ba/b[height<=720]/b".into(),
+    }
+}
+
+fn audio_quality_arg(quality: &str) -> &'static str {
+    match quality {
+        "128" => "5",
+        "256" => "2",
+        "320" => "0",
+        _ => "3",
+    }
+}
+
+fn read_pipe(child: &mut Child) -> (String, String) {
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+    if let Some(mut out) = child.stdout.take() {
+        let _ = out.read_to_string(&mut stdout);
+    }
+    if let Some(mut err) = child.stderr.take() {
+        let _ = err.read_to_string(&mut stderr);
+    }
+    (stdout, stderr)
 }
 
 #[tauri::command]
@@ -99,7 +139,24 @@ fn sign_out(auth: State<'_, AppAuth>) -> Result<AuthInfo, String> {
 }
 
 #[tauri::command]
-fn download_youtube(url: String, audio_only: bool) -> Result<DownloadResult, String> {
+fn cancel_download(ctl: State<'_, DownloadCtl>) -> Result<(), String> {
+    ctl.cancel.store(true, Ordering::SeqCst);
+    if let Ok(mut guard) = ctl.child.lock() {
+        if let Some(child) = guard.as_mut() {
+            let _ = child.kill();
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn download_youtube(
+    url: String,
+    audio_only: bool,
+    quality: String,
+    save_dir: Option<String>,
+    ctl: State<'_, DownloadCtl>,
+) -> Result<DownloadResult, String> {
     let url = url.trim().to_string();
     if url.is_empty() {
         return Err("Paste a YouTube URL.".into());
@@ -108,8 +165,13 @@ fn download_youtube(url: String, audio_only: bool) -> Result<DownloadResult, Str
         return Err("URL must be a YouTube link.".into());
     }
 
+    ctl.cancel.store(false, Ordering::SeqCst);
+
     let yt = ensure_yt_dlp()?;
-    let out_dir = downloads_dir()?;
+    let out_dir = match save_dir.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(dir) => PathBuf::from(dir),
+        None => default_downloads_dir()?,
+    };
     fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
 
     let template = out_dir
@@ -124,6 +186,7 @@ fn download_youtube(url: String, audio_only: bool) -> Result<DownloadResult, Str
         "--print".into(),
         "after_move:filepath".into(),
         "--newline".into(),
+        "--no-color".into(),
     ];
 
     if audio_only {
@@ -132,57 +195,106 @@ fn download_youtube(url: String, audio_only: bool) -> Result<DownloadResult, Str
             "--audio-format".into(),
             "mp3".into(),
             "--audio-quality".into(),
-            "0".into(),
+            audio_quality_arg(quality.trim()).into(),
         ]);
     } else {
         args.extend([
             "-f".into(),
-            "bv*[height<=720]+ba/b[height<=720]/b".into(),
+            video_format(quality.trim()),
             "--merge-output-format".into(),
             "mp4".into(),
         ]);
     }
     args.push(url);
 
-    let output = Command::new(&yt)
+    let child = Command::new(&yt)
         .args(&args)
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|e| format!("Failed to start yt-dlp: {e}"))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Download failed:\n{stderr}"));
+    {
+        let mut guard = ctl
+            .child
+            .lock()
+            .map_err(|_| "Download lock poisoned".to_string())?;
+        *guard = Some(child);
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let path = stdout
-        .lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-        .last()
-        .unwrap_or("")
-        .to_string();
+    loop {
+        if ctl.cancel.load(Ordering::SeqCst) {
+            if let Ok(mut guard) = ctl.child.lock() {
+                if let Some(c) = guard.as_mut() {
+                    let _ = c.kill();
+                    let _ = c.wait();
+                }
+                *guard = None;
+            }
+            return Err("Download cancelled.".into());
+        }
 
-    if path.is_empty() {
-        return Ok(DownloadResult {
-            path: out_dir.to_string_lossy().to_string(),
-            message: "Saved to your Downloads folder.".into(),
-        });
+        {
+            let mut guard = ctl
+                .child
+                .lock()
+                .map_err(|_| "Download lock poisoned".to_string())?;
+            let child = guard
+                .as_mut()
+                .ok_or_else(|| "Download process missing.".to_string())?;
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    let (stdout, stderr) = read_pipe(child);
+                    let _ = guard.take();
+                    if ctl.cancel.load(Ordering::SeqCst) {
+                        return Err("Download cancelled.".into());
+                    }
+                    if !status.success() {
+                        return Err(format!("Download failed:\n{stderr}"));
+                    }
+                    let path = stdout
+                        .lines()
+                        .map(str::trim)
+                        .filter(|l| !l.is_empty())
+                        .last()
+                        .unwrap_or("")
+                        .to_string();
+                    if path.is_empty() {
+                        return Ok(DownloadResult {
+                            path: out_dir.to_string_lossy().to_string(),
+                            message: "Saved.".into(),
+                        });
+                    }
+                    return Ok(DownloadResult {
+                        message: "Download complete.".into(),
+                        path,
+                    });
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    let _ = guard.take();
+                    return Err(format!("Download failed: {e}"));
+                }
+            }
+        }
+
+        thread::sleep(Duration::from_millis(200));
     }
-
-    Ok(DownloadResult {
-        message: "Download complete.".into(),
-        path,
-    })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppAuth(Mutex::new(AuthState::default())))
+        .manage(DownloadCtl {
+            child: Mutex::new(None),
+            cancel: AtomicBool::new(false),
+        })
         .invoke_handler(tauri::generate_handler![
             download_youtube,
+            cancel_download,
             get_auth,
             sign_in,
             sign_out

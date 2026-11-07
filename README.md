@@ -33,7 +33,24 @@ npm run tauri dev
 
 Download uses **`yt-dlp` on PATH** (install separately for now; later we can bundle it).
 
-Auth0 Sign-in / Free–Premium gates: next step (first download free, then same Auth0 as Tools).
+### Auth0 callback on each user’s PC
+
+Yes — use the **same** callback everywhere:
+
+`http://127.0.0.1:54821/callback`
+
+`127.0.0.1` is each user’s own computer. Auth0 redirects back to that machine after login. Register it once in the Auth0 application Allowed Callback URLs.
+
+### Create Windows EXE + Mac app for GitHub
+
+1. Push this repo to GitHub.
+2. Open **Actions** → **Tauri desktop release** (runs on push to `main`, or click **Run workflow**).
+3. When green, open the draft **Release** (or workflow artifacts) and download:
+   - Windows: `.exe` / `.msi` / NSIS setup
+   - macOS: `.dmg` / `.app` bundle
+4. Attach those files to a GitHub Release for users (your personal repo first; move later).
+
+Local alternative (this OS only): `cd desktop && npm run tauri build`
 
 ## Folder choice
 
