@@ -117,16 +117,6 @@ fn audio_bitrate_kbps(quality: &str) -> u64 {
     }
 }
 
-fn video_height_cap(quality: &str) -> Option<u64> {
-    match quality {
-        "360" => Some(360),
-        "480" => Some(480),
-        "1080" => Some(1080),
-        "best" => None,
-        _ => Some(720),
-    }
-}
-
 fn format_bytes(n: u64) -> String {
     const KB: f64 = 1024.0;
     const MB: f64 = KB * 1024.0;
@@ -143,141 +133,73 @@ fn format_bytes(n: u64) -> String {
     }
 }
 
-fn bytes_from_format(fmt: &serde_json::Value, duration: Option<f64>) -> Option<u64> {
-    if let Some(n) = fmt.get("filesize").and_then(|v| v.as_u64()) {
-        if n > 0 {
-            return Some(n);
-        }
+fn format_size_field(fmt: &serde_json::Value, duration: Option<f64>) -> (Option<u64>, bool) {
+    if let Some(n) = fmt.get("filesize").and_then(|v| v.as_u64()).filter(|n| *n > 0) {
+        return (Some(n), false);
     }
-    if let Some(n) = fmt.get("filesize_approx").and_then(|v| v.as_u64()) {
-        if n > 0 {
-            return Some(n);
-        }
+    if let Some(n) = fmt
+        .get("filesize_approx")
+        .and_then(|v| v.as_u64())
+        .filter(|n| *n > 0)
+    {
+        return (Some(n), true);
     }
     let tbr = fmt
         .get("tbr")
         .and_then(|v| v.as_f64())
-        .filter(|b| *b > 0.0)
-        .or_else(|| fmt.get("abr").and_then(|v| v.as_f64()).filter(|b| *b > 0.0))
-        .or_else(|| fmt.get("vbr").and_then(|v| v.as_f64()).filter(|b| *b > 0.0))?;
-    let dur = duration.filter(|d| *d > 0.0)?;
-    // tbr is kbps → bytes ≈ seconds * kbps * 1000 / 8
-    Some((dur * tbr * 125.0).round() as u64)
-}
-
-fn pick_video_format<'a>(
-    formats: &'a [serde_json::Value],
-    max_height: Option<u64>,
-) -> Option<&'a serde_json::Value> {
-    let mut best: Option<(&serde_json::Value, u64, f64)> = None;
-    for fmt in formats {
-        let vcodec = fmt.get("vcodec").and_then(|v| v.as_str()).unwrap_or("none");
-        if vcodec == "none" || vcodec == "images" {
-            continue;
-        }
-        let ext = fmt.get("ext").and_then(|v| v.as_str()).unwrap_or("");
-        if ext == "mhtml" {
-            continue;
-        }
-        let height = fmt.get("height").and_then(|v| v.as_u64()).unwrap_or(0);
-        if let Some(cap) = max_height {
-            if height == 0 || height > cap {
-                continue;
-            }
-        }
-        let tbr = fmt.get("tbr").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let score_h = height;
-        let better = match best {
-            None => true,
-            Some((_, bh, bt)) => score_h > bh || (score_h == bh && tbr > bt),
-        };
-        if better {
-            best = Some((fmt, score_h, tbr));
-        }
+        .or_else(|| fmt.get("abr").and_then(|v| v.as_f64()))
+        .or_else(|| fmt.get("vbr").and_then(|v| v.as_f64()))
+        .filter(|b| *b > 0.0);
+    let dur = duration
+        .or_else(|| fmt.get("duration").and_then(|v| v.as_f64()))
+        .filter(|d| *d > 0.0);
+    match (tbr, dur) {
+        (Some(tbr), Some(dur)) => (Some((dur * tbr * 125.0).round() as u64), true),
+        _ => (None, true),
     }
-    best.map(|(f, _, _)| f)
 }
 
-fn pick_audio_format<'a>(formats: &'a [serde_json::Value]) -> Option<&'a serde_json::Value> {
-    let mut best: Option<(&serde_json::Value, f64)> = None;
-    for fmt in formats {
-        let acodec = fmt.get("acodec").and_then(|v| v.as_str()).unwrap_or("none");
-        let vcodec = fmt.get("vcodec").and_then(|v| v.as_str()).unwrap_or("none");
-        if acodec == "none" || vcodec != "none" {
-            continue;
-        }
-        let abr = fmt
-            .get("abr")
-            .and_then(|v| v.as_f64())
-            .or_else(|| fmt.get("tbr").and_then(|v| v.as_f64()))
-            .unwrap_or(0.0);
-        let better = match best {
-            None => true,
-            Some((_, b)) => abr > b,
-        };
-        if better {
-            best = Some((fmt, abr));
-        }
-    }
-    best.map(|(f, _)| f)
-}
-
-#[derive(Serialize)]
-struct SizeEstimate {
-    bytes: u64,
-    label: String,
-    approximate: bool,
-}
-
-fn estimate_from_info(
-    info: &serde_json::Value,
-    audio_only: bool,
-    quality: &str,
-) -> Result<SizeEstimate, String> {
-    let duration = info.get("duration").and_then(|v| v.as_f64());
-    if audio_only {
-        let dur = duration.ok_or_else(|| "Could not read video duration.".to_string())?;
-        let kbps = audio_bitrate_kbps(quality);
-        let bytes = (dur * kbps as f64 * 125.0).round() as u64;
-        return Ok(SizeEstimate {
-            bytes,
-            label: format!("~{}", format_bytes(bytes)),
-            approximate: true,
-        });
-    }
-
-    let formats = info
-        .get("formats")
-        .and_then(|v| v.as_array())
-        .ok_or_else(|| "No format list from yt-dlp.".to_string())?;
-
-    let max_h = video_height_cap(quality);
-    let video = pick_video_format(formats, max_h)
-        .ok_or_else(|| "No matching video format for that quality.".to_string())?;
-    let audio = pick_audio_format(formats);
-
+fn size_from_selected(info: &serde_json::Value, duration: Option<f64>) -> Result<SizeEstimate, String> {
     let mut total = 0u64;
     let mut approx = false;
     let mut any = false;
 
-    if let Some(n) = bytes_from_format(video, duration) {
-        total += n;
-        any = true;
-        if video.get("filesize").and_then(|v| v.as_u64()).unwrap_or(0) == 0 {
-            approx = true;
-        }
-    }
-    if let Some(a) = audio {
-        if let Some(n) = bytes_from_format(a, duration) {
-            total += n;
-            any = true;
-            if a.get("filesize").and_then(|v| v.as_u64()).unwrap_or(0) == 0 {
-                approx = true;
+    if let Some(parts) = info.get("requested_formats").and_then(|v| v.as_array()) {
+        for part in parts {
+            if let (Some(n), was_approx) = format_size_field(part, duration) {
+                total += n;
+                any = true;
+                approx |= was_approx;
             }
         }
-    } else if let Some(n) = bytes_from_format(video, duration) {
-        // progressive (video+audio in one) already counted
-        let _ = n;
+    } else if let (Some(n), was_approx) = format_size_field(info, duration) {
+        total = n;
+        any = true;
+        approx = was_approx;
+    }
+
+    if !any || total == 0 {
+        // Last resort: duration × total bitrate of selected stream(s)
+        let tbr = info
+            .get("tbr")
+            .and_then(|v| v.as_f64())
+            .filter(|b| *b > 0.0)
+            .or_else(|| {
+                info.get("requested_formats")
+                    .and_then(|v| v.as_array())
+                    .map(|parts| {
+                        parts
+                            .iter()
+                            .filter_map(|p| p.get("tbr").and_then(|v| v.as_f64()))
+                            .sum::<f64>()
+                    })
+                    .filter(|b| *b > 0.0)
+            });
+        if let (Some(dur), Some(tbr)) = (duration.filter(|d| *d > 0.0), tbr) {
+            total = (dur * tbr * 125.0).round() as u64;
+            any = total > 0;
+            approx = true;
+        }
     }
 
     if !any || total == 0 {
@@ -296,6 +218,13 @@ fn estimate_from_info(
     })
 }
 
+#[derive(Serialize)]
+struct SizeEstimate {
+    bytes: u64,
+    label: String,
+    approximate: bool,
+}
+
 #[tauri::command]
 fn estimate_download_size(
     url: String,
@@ -303,6 +232,7 @@ fn estimate_download_size(
     quality: String,
 ) -> Result<SizeEstimate, String> {
     let url = url.trim().to_string();
+    let quality = quality.trim().to_string();
     if url.is_empty() {
         return Err("Paste a YouTube URL.".into());
     }
@@ -311,15 +241,24 @@ fn estimate_download_size(
     }
 
     let yt = ensure_yt_dlp()?;
+
+    // Match the same format selection the downloader uses.
+    let mut args: Vec<String> = vec![
+        "--no-playlist".into(),
+        "--skip-download".into(),
+        "--no-warnings".into(),
+        "--no-color".into(),
+        "-J".into(),
+    ];
+    if audio_only {
+        // Final file is re-encoded MP3 at the chosen bitrate — estimate from duration.
+        args.push(url.clone());
+    } else {
+        args.extend(["-f".into(), video_format(&quality), url.clone()]);
+    }
+
     let output = Command::new(&yt)
-        .args([
-            "--no-playlist",
-            "--skip-download",
-            "--no-warnings",
-            "--no-color",
-            "-J",
-            &url,
-        ])
+        .args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -332,7 +271,20 @@ fn estimate_download_size(
 
     let info: serde_json::Value = serde_json::from_slice(&output.stdout)
         .map_err(|e| format!("Bad yt-dlp JSON: {e}"))?;
-    estimate_from_info(&info, audio_only, quality.trim())
+    let duration = info.get("duration").and_then(|v| v.as_f64());
+
+    if audio_only {
+        let dur = duration.ok_or_else(|| "Could not read video duration.".to_string())?;
+        let kbps = audio_bitrate_kbps(&quality);
+        let bytes = (dur * kbps as f64 * 125.0).round() as u64;
+        return Ok(SizeEstimate {
+            bytes,
+            label: format!("~{}", format_bytes(bytes)),
+            approximate: true,
+        });
+    }
+
+    size_from_selected(&info, duration)
 }
 
 fn read_pipe(child: &mut Child) -> (String, String) {
