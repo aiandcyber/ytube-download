@@ -1,58 +1,40 @@
 # ytube-download
 
-YouTube → MP4 / MP3 **on this device** (Windows + Mac). No server YouTube download.
+**Desktop app (Tauri)** — Download YouTube on Windows / Mac. Not a mobile product.
 
-## Repos (two places)
-
-| What | Where |
+| Path | Role |
 |---|---|
-| **Source code** (this project) | Your **personal** GitHub repo (sync/push from here) |
-| **EXE / Mac zip + short README for users** | A **separate distribution** GitHub account/repo (when ready). Tools website download buttons point there. |
+| `desktop/` | **Tauri app** (source of truth for the product) |
+| Flutter folders (`lib/`, `android/`, …) | Legacy — ignore; will be removed |
+| GitHub Actions → **Tauri desktop release** | Builds **Windows + macOS** installers |
 
-Do **not** host installers on GCP if egress cost matters. GitHub Releases on the distribution account is the free host.
+## Your plan
 
-## Auth (Auth0 only)
+1. Push this repo to your **personal GitHub** (can be public).
+2. Actions builds installers → put EXE/DMG on Releases (personal first; move distribution account later).
+3. Tools website download buttons point at those Release assets.
 
-- Same Auth0 tenant/audience as Tools.
-- **First download free** (Sign in optional at start).
-- Later downloads require **Auth0 Sign in** in the app (no activation keys).
+## EXE / Mac — do you need a Windows PC?
 
-In Auth0 → Applications → Tools SPA (or a Native app), add Allowed Callback URL:
+| Build | Where |
+|---|---|
+| Windows installer / EXE | **Windows PC** or **GitHub Actions `windows-latest`** (recommended). WSL cross-compile exists but is fragile — use Actions. |
+| macOS app / DMG | **Mac** or **GitHub Actions `macos-latest`**. Cannot build from WSL/Windows. |
 
-`http://127.0.0.1:54821/callback`
+**Recommended:** push → wait for Actions → download Release draft assets → double-click. No local Rust/Tauri required for testers.
 
-Also add Allowed Logout / Origins for `http://127.0.0.1:54821` if Auth0 asks.
+## Develop (optional, on a machine with Rust + OS deps)
 
-## Get a Windows EXE (no Flutter commands on your PC)
-
-This environment cannot build a `.exe` (needs Windows + Visual Studio). Use **GitHub Actions** instead:
-
-1. Push this repo to your **personal** GitHub.
-2. Open **Actions** → workflow **Build Windows EXE** → wait until green.
-3. Download the artifact **`ytube-download-windows`** (a zip).
-4. Unzip → double-click **`ytube_download.exe`**.
-
-That folder is what you later upload to the **distribution** GitHub account Releases for website users.
-
-Auth0 callback (for Sign in after the free first download):
-
-`http://127.0.0.1:54821/callback`
-
-### Is an EXE ready right now?
-
-**Not in this folder yet** — no Release binary has been built. After you push and the Action finishes, you will have a double-click EXE.
-
-## Mac
-
-```
-flutter create . --platforms=macos
-flutter pub get
-flutter run -d macos
-flutter build macos
+```bash
+cd desktop
+npm install
+npm run tauri dev
 ```
 
-## Entitlement API
+Download uses **`yt-dlp` on PATH** (install separately for now; later we can bundle it).
 
-`POST {API}/api/control/authorize`  
-Body: `{"tool_id":"youtube_download","action":"run","commit":true}`  
-Headers: `Authorization: Bearer <Auth0 access token>` and `X-Device-Id: <stable device id>` for the free first download.
+Auth0 Sign-in / Free–Premium gates: next step (first download free, then same Auth0 as Tools).
+
+## Folder choice
+
+App lives in **`desktop/`** inside this repo (not a separate repo). One public `ytube-download` repo for source + CI.
