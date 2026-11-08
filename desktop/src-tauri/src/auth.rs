@@ -10,7 +10,8 @@ use url::form_urlencoded;
 const DOMAIN: &str = "dev-tvq4tbikhbet8orb.us.auth0.com";
 const CLIENT_ID: &str = "YX6isR6f4VdTViqA7tcVxlKUeWyk4ITY";
 const AUDIENCE: &str = "https://api.ai-forall.org";
-const REDIRECT: &str = "http://127.0.0.1:54821/callback";
+const LOOPBACK_PORTS: &[u16] = &[54821, 54822, 54823];
+const HELP_URL: &str = "https://tools.ai-forall.org/help/known-issues";
 
 #[derive(Default)]
 pub struct AuthState {
@@ -52,17 +53,48 @@ pub fn sign_out(state: &mut AuthState) {
     state.email = None;
 }
 
+fn redirect_uri(port: u16) -> String {
+    format!("http://127.0.0.1:{port}/callback")
+}
+
+fn bind_loopback() -> Result<(TcpListener, u16), String> {
+    let mut tried = Vec::new();
+    for &port in LOOPBACK_PORTS {
+        tried.push(port);
+        if let Ok(listener) = TcpListener::bind(("127.0.0.1", port)) {
+            return Ok((listener, port));
+        }
+    }
+    let list = tried
+        .iter()
+        .map(|p| p.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    Err(format!(
+        "Sign-in could not start: login ports {list} are already in use on this computer.\n\n\
+What to do:\n\
+1. Close other AI-forAll desktop apps that may be signing in.\n\
+2. Wait a few seconds and try Sign in again.\n\
+3. Restart this app, then try Sign in again.\n\
+4. Restart your computer if another program is stuck on those ports.\n\n\
+More help: {HELP_URL}"
+    ))
+}
+
 pub fn sign_in(state: &Mutex<AuthState>) -> Result<AuthInfo, String> {
     let verifier = random_url_safe(64);
     let challenge = pkce_challenge(&verifier);
     let csrf = random_url_safe(24);
+
+    let (listener, port) = bind_loopback()?;
+    let redirect = redirect_uri(port);
 
     let auth_url = format!(
         "https://{DOMAIN}/authorize?{}",
         form_urlencoded::Serializer::new(String::new())
             .append_pair("response_type", "code")
             .append_pair("client_id", CLIENT_ID)
-            .append_pair("redirect_uri", REDIRECT)
+            .append_pair("redirect_uri", &redirect)
             .append_pair("scope", "openid profile email offline_access")
             .append_pair("audience", AUDIENCE)
             .append_pair("state", &csrf)
@@ -70,9 +102,6 @@ pub fn sign_in(state: &Mutex<AuthState>) -> Result<AuthInfo, String> {
             .append_pair("code_challenge_method", "S256")
             .finish()
     );
-
-    let listener = TcpListener::bind("127.0.0.1:54821")
-        .map_err(|e| format!("Could not start login listener: {e}"))?;
 
     opener::open(&auth_url).map_err(|e| format!("Could not open browser: {e}"))?;
 
@@ -119,7 +148,7 @@ pub fn sign_in(state: &Mutex<AuthState>) -> Result<AuthInfo, String> {
             "client_id": CLIENT_ID,
             "code_verifier": verifier,
             "code": code,
-            "redirect_uri": REDIRECT,
+            "redirect_uri": redirect,
         }))
         .send()
         .map_err(|e| format!("Token request failed: {e}"))?;
