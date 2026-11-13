@@ -1,5 +1,5 @@
-# Builds Windows installer for the Tauri app in /desktop
-# Mac build paused (Coming soon on the website).
+# WSL/Windows: edit + push. GitHub Actions builds native installers.
+# Mac: macos-latest runner (no local Mac required). Unsigned until Apple cert secrets are added.
 name: Tauri desktop release
 
 on:
@@ -36,7 +36,37 @@ jobs:
           projectPath: desktop
           tagName: app-v__VERSION__
           releaseName: "YouTube Download v__VERSION__"
-          releaseBody: "Windows desktop build. Double-click the .exe installer. Mac coming soon."
+          releaseBody: "Desktop installers from CI. Windows: .msi/.exe. macOS: .dmg/.app (unsigned until Apple notarization is configured)."
+          releaseDraft: false
+          prerelease: false
+          args: ""
+
+  publish-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend deps
+        working-directory: desktop
+        run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          tagName: app-v__VERSION__
+          releaseName: "YouTube Download v__VERSION__"
+          releaseBody: "Desktop installers from CI. Windows: .msi/.exe. macOS: .dmg/.app (unsigned until Apple notarization is configured)."
           releaseDraft: false
           prerelease: false
           args: ""

@@ -8,4 +8,4 @@ npm run tauri dev    # needs Rust + platform WebView deps
 npm run tauri build  # native installer for *this* OS only
 ```
 
-CI builds both platforms from the repo root workflow `.github/workflows/tauri-release.yml`.
+CI (repo root `.github/workflows/tauri-release.yml`) builds **Windows + macOS** on push to `main` / `workflow_dispatch`. No local Mac required; Mac artifacts are unsigned until Apple notarization is configured.
