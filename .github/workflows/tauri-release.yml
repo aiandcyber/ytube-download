@@ -36,7 +36,7 @@ jobs:
           projectPath: desktop
           tagName: app-v__VERSION__
           releaseName: "YouTube Download v__VERSION__"
-          releaseBody: "Desktop installers from CI. Windows: .msi/.exe. macOS: .dmg/.app (unsigned until Apple notarization is configured)."
+          releaseBody: "YouTube Download for Windows and Mac. Prefer the simple download page: https://aiandcyber.github.io/ytube-download/ — choose Windows or Mac and press Download."
           releaseDraft: false
           prerelease: false
           args: ""
@@ -66,7 +66,7 @@ jobs:
           projectPath: desktop
           tagName: app-v__VERSION__
           releaseName: "YouTube Download v__VERSION__"
-          releaseBody: "Desktop installers from CI. Windows: .msi/.exe. macOS: .dmg/.app (unsigned until Apple notarization is configured)."
+          releaseBody: "YouTube Download for Windows and Mac. Prefer the simple download page: https://aiandcyber.github.io/ytube-download/ — choose Windows or Mac and press Download."
           releaseDraft: false
           prerelease: false
           args: ""
