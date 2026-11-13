@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Download YouTube Download</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f4f7f6; color: #0f172a; }
+    main { width: min(640px, 92vw); background: #fff; border-radius: 24px; padding: 2rem 1.5rem; box-shadow: 0 18px 50px rgba(15,23,42,.08); }
+    h1 { margin: 0 0 .4rem; font-size: 1.6rem; }
+    p { margin: 0 0 1.4rem; color: #475569; line-height: 1.45; }
+    .grid { display: grid; gap: 1rem; grid-template-columns: 1fr 1fr; }
+    @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+    .card { display: grid; gap: .75rem; justify-items: center; text-align: center; padding: 1.2rem; border: 1px solid #dbe3e1; border-radius: 18px; background: #fafefe; }
+    .card img { width: 72px; height: 72px; }
+    .card strong { font-size: 1.1rem; }
+    button {
+      border: 0; border-radius: 999px; padding: .75rem 1.3rem; font: inherit; font-weight: 750;
+      background: #0f766e; color: #fff; cursor: pointer; min-width: 10rem;
+    }
+    button:disabled { opacity: .7; cursor: wait; }
+    .err { color: #b91c1c; font-size: .9rem; min-height: 1.2rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>YouTube Download</h1>
+    <p>Choose your computer. One click downloads the right installer — no file lists.</p>
+    <div class="grid">
+      <div class="card">
+        <img src="windows.svg" alt="Windows" width="72" height="72" />
+        <strong>Windows</strong>
+        <button type="button" id="winBtn">Download</button>
+        <div class="err" id="winErr"></div>
+      </div>
+      <div class="card">
+        <img src="macos.svg" alt="Mac" width="72" height="72" />
+        <strong>Mac</strong>
+        <button type="button" id="macBtn">Download</button>
+        <div class="err" id="macErr"></div>
+      </div>
+    </div>
+  </main>
+  <script src="download.js"></script>
+  <script>
+    bindDownload({
+      api: 'https://api.github.com/repos/aiandcyber/ytube-download/releases/latest',
+      winBtn: 'winBtn', winErr: 'winErr',
+      macBtn: 'macBtn', macErr: 'macErr',
+    })
+  </script>
+</body>
+</html>

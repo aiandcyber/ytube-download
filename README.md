@@ -20,6 +20,7 @@
 |---|---|
 | Windows installer / EXE | **Windows PC** or **GitHub Actions `windows-latest`** (recommended). WSL cross-compile exists but is fragile — use Actions. |
 | macOS app / DMG | **GitHub Actions `macos-latest`** (preferred; no local Mac). Cannot build from WSL/Windows. |
+| Friendly download page | GitHub Pages `/docs` → https://aiandcyber.github.io/ytube-download/ (Windows/Mac buttons; auto-picks installer) |
 
 **Recommended:** push → wait for Actions → download Release draft assets → double-click. No local Rust/Tauri required for testers.
 
