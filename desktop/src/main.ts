@@ -213,5 +213,16 @@ window.addEventListener("DOMContentLoaded", () => {
   document.querySelector("#cancel")?.addEventListener("click", () => void cancelDownload());
   document.querySelector("#pick-folder")?.addEventListener("click", () => void pickFolder());
   document.querySelector("#auth-btn")?.addEventListener("click", () => void toggleAuth());
+
+  const mainView = document.querySelector("#view-main");
+  const contactView = document.querySelector("#view-contact");
+  const showContact = (on: boolean) => {
+    mainView?.classList.toggle("hidden", on);
+    contactView?.classList.toggle("hidden", !on);
+    if (contactView instanceof HTMLElement) contactView.hidden = !on;
+  };
+  document.querySelector("#contact-btn")?.addEventListener("click", () => showContact(true));
+  document.querySelector("#contact-back")?.addEventListener("click", () => showContact(false));
+
   void refreshAuth();
 });

@@ -5,13 +5,14 @@
     <link rel="stylesheet" href="/src/styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>YouTube Download</title>
+    <link rel="icon" type="image/png" href="/ai-forall-icon.png" />
     <script type="module" src="/src/main.ts" defer></script>
   </head>
   <body>
     <div class="app">
       <header class="topbar">
         <div class="brand">
-          <span class="logo" aria-hidden="true"></span>
+          <img class="logo" src="/ai-forall-icon.png" width="40" height="40" alt="AI-forAll" />
           <div>
             <strong>YouTube Download</strong>
             <span class="sub">AI-forAll Tools</span>
@@ -20,10 +21,11 @@
         <div class="account">
           <span id="account-label" class="account-label">Not signed in</span>
           <button type="button" id="auth-btn" class="btn ghost">Sign in</button>
+          <button type="button" id="contact-btn" class="btn ghost">Contact us</button>
         </div>
       </header>
 
-      <main class="panel">
+      <main class="panel" id="view-main">
         <h1>Save a video or audio track</h1>
         <p class="hint">Choose quality and where to save, then download.</p>
 
@@ -56,6 +58,37 @@
           <button type="button" id="cancel" class="btn ghost danger hidden">Cancel</button>
         </div>
         <p id="status" class="status" role="status"></p>
+        <footer class="app-footer">
+          <span>© 2026 AI-forAll Hong Kong Limited 全民人工智能香港有限公司</span>
+        </footer>
+      </main>
+
+      <main class="panel contact-panel hidden" id="view-contact" hidden>
+        <div class="contact-head">
+          <button type="button" id="contact-back" class="btn ghost">← Back</button>
+          <h1>Contact Us</h1>
+          <p class="hint">Our offices and how to reach us.</p>
+        </div>
+        <section class="contact-offices" aria-label="Our offices">
+          <article class="contact-office">
+            <h2>Hong Kong</h2>
+            <p>1112, Wing On Plaza, 62 Mody Road, Tsim Sha Tsui East, Kowloon, Hong Kong.</p>
+            <p><a href="mailto:Contact@ai-forall.org">Contact@ai-forall.org</a></p>
+          </article>
+          <article class="contact-office">
+            <h2>USA</h2>
+            <p>58th Street North, Stillwater, Minnesota - 55082, USA.</p>
+            <p><a href="mailto:Contact@ai-forall.org">Contact@ai-forall.org</a></p>
+            <p>WhatsApp<br />+1 715 5231188</p>
+          </article>
+        </section>
+        <p class="hint">
+          Prefer the web form?
+          <a href="https://tools.ai-forall.org/contact" target="_blank" rel="noreferrer">tools.ai-forall.org/contact</a>
+        </p>
+        <footer class="app-footer">
+          <span>© 2026 AI-forAll Hong Kong Limited 全民人工智能香港有限公司</span>
+        </footer>
       </main>
     </div>
   </body>
