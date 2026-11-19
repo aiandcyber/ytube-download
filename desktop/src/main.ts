@@ -1,8 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { mountAgentPanel } from "./agentPanel";
 
 type DownloadResult = { path: string; message: string };
-type AuthInfo = { signed_in: boolean; email: string | null };
+type AuthInfo = { signed_in: boolean; email: string | null; access_token?: string | null };
 type SizeEstimate = { bytes: number; label: string; approximate: boolean };
 
 const VIDEO_QUALITIES = [
@@ -223,6 +224,22 @@ window.addEventListener("DOMContentLoaded", () => {
   };
   document.querySelector("#contact-btn")?.addEventListener("click", () => showContact(true));
   document.querySelector("#contact-back")?.addEventListener("click", () => showContact(false));
+
+  const agentMount = document.querySelector<HTMLElement>("#agent-root");
+  if (agentMount) {
+    mountAgentPanel({
+      mount: agentMount,
+      productHint: "YouTube Download desktop app (Windows/Mac)",
+      getAccessToken: async () => {
+        try {
+          const info = await invoke<AuthInfo>("get_auth");
+          return info.access_token || null;
+        } catch {
+          return null;
+        }
+      },
+    });
+  }
 
   void refreshAuth();
 });

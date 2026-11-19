@@ -23,6 +23,8 @@ pub struct AuthState {
 pub struct AuthInfo {
     pub signed_in: bool,
     pub email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access_token: Option<String>,
 }
 
 fn random_url_safe(n: usize) -> String {
@@ -45,6 +47,7 @@ pub fn auth_status(state: &AuthState) -> AuthInfo {
             .map(|t| !t.is_empty())
             .unwrap_or(false),
         email: state.email.clone(),
+        access_token: state.access_token.clone(),
     }
 }
 

@@ -25,64 +25,69 @@
         </div>
       </header>
 
-      <main class="panel" id="view-main">
-        <h1>Save a video or audio track</h1>
-        <p class="hint">Choose quality and where to save, then download.</p>
+      <div class="workspace">
+        <div class="workspace-main">
+          <main class="panel" id="view-main">
+            <h1>Save a video or audio track</h1>
+            <p class="hint">Choose quality and where to save, then download.</p>
 
-        <div class="segment" role="group" aria-label="Format">
-          <button type="button" id="mode-mp4" class="seg on">MP4</button>
-          <button type="button" id="mode-mp3" class="seg">MP3</button>
+            <div class="segment" role="group" aria-label="Format">
+              <button type="button" id="mode-mp4" class="seg on">MP4</button>
+              <button type="button" id="mode-mp3" class="seg">MP3</button>
+            </div>
+
+            <label class="field" id="quality-wrap">
+              <span id="quality-label">Video quality</span>
+              <select id="quality"></select>
+            </label>
+
+            <label class="field">
+              <span>YouTube link</span>
+              <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off" />
+            </label>
+            <p id="size-estimate" class="estimate" aria-live="polite"></p>
+
+            <div class="save-row">
+              <label class="field grow">
+                <span>Save folder</span>
+                <input id="save-dir" type="text" readonly placeholder="Downloads (default)" />
+              </label>
+              <button type="button" id="pick-folder" class="btn ghost save-btn">Choose…</button>
+            </div>
+
+            <div class="actions">
+              <button type="button" id="run" class="btn primary">Download</button>
+              <button type="button" id="cancel" class="btn ghost danger hidden">Cancel</button>
+            </div>
+            <p id="status" class="status" role="status"></p>
+            <footer class="app-footer">
+              <span>© 2026 AI-forAll Hong Kong Limited 全民人工智能香港有限公司</span>
+            </footer>
+          </main>
+
+          <main class="panel contact-panel hidden" id="view-contact" hidden>
+            <div class="contact-head">
+              <button type="button" id="contact-back" class="btn ghost">← Back</button>
+              <h1>Contact Us</h1>
+              <p class="hint">Email us or visit our website.</p>
+            </div>
+            <section class="contact-offices" aria-label="Contact">
+              <article class="contact-office">
+                <h2>Email</h2>
+                <p><a href="mailto:Contact@ai-forall.org">Contact@ai-forall.org</a></p>
+              </article>
+              <article class="contact-office">
+                <h2>Website</h2>
+                <p><a href="https://tools.ai-forall.org/contact" target="_blank" rel="noreferrer">https://tools.ai-forall.org/contact</a></p>
+              </article>
+            </section>
+            <footer class="app-footer">
+              <span>© 2026 AI-forAll Hong Kong Limited 全民人工智能香港有限公司</span>
+            </footer>
+          </main>
         </div>
-
-        <label class="field" id="quality-wrap">
-          <span id="quality-label">Video quality</span>
-          <select id="quality"></select>
-        </label>
-
-        <label class="field">
-          <span>YouTube link</span>
-          <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off" />
-        </label>
-        <p id="size-estimate" class="estimate" aria-live="polite"></p>
-
-        <div class="save-row">
-          <label class="field grow">
-            <span>Save folder</span>
-            <input id="save-dir" type="text" readonly placeholder="Downloads (default)" />
-          </label>
-          <button type="button" id="pick-folder" class="btn ghost save-btn">Choose…</button>
-        </div>
-
-        <div class="actions">
-          <button type="button" id="run" class="btn primary">Download</button>
-          <button type="button" id="cancel" class="btn ghost danger hidden">Cancel</button>
-        </div>
-        <p id="status" class="status" role="status"></p>
-        <footer class="app-footer">
-          <span>© 2026 AI-forAll Hong Kong Limited 全民人工智能香港有限公司</span>
-        </footer>
-      </main>
-
-      <main class="panel contact-panel hidden" id="view-contact" hidden>
-        <div class="contact-head">
-          <button type="button" id="contact-back" class="btn ghost">← Back</button>
-          <h1>Contact Us</h1>
-          <p class="hint">Email us or visit our website.</p>
-        </div>
-        <section class="contact-offices" aria-label="Contact">
-          <article class="contact-office">
-            <h2>Email</h2>
-            <p><a href="mailto:Contact@ai-forall.org">Contact@ai-forall.org</a></p>
-          </article>
-          <article class="contact-office">
-            <h2>Website</h2>
-            <p><a href="https://tools.ai-forall.org/contact" target="_blank" rel="noreferrer">https://tools.ai-forall.org/contact</a></p>
-          </article>
-        </section>
-        <footer class="app-footer">
-          <span>© 2026 AI-forAll Hong Kong Limited 全民人工智能香港有限公司</span>
-        </footer>
-      </main>
+        <div id="agent-root" class="agent-root" aria-label="AI Agent"></div>
+      </div>
     </div>
   </body>
 </html>
