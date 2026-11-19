@@ -304,11 +304,42 @@ export function mountAgentPanel(opts: AgentPanelOptions): { refreshAuthHint: () 
       const ctype = res.headers.get('content-type') || ''
       if (ctype.includes('text/event-stream') && res.body) {
         assistantEl.textContent = ''
+        assistantEl.classList.add('is-streaming')
+        const reduceMotion =
+          typeof window !== 'undefined' &&
+          window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+        const queue: string[] = []
+        let typing = false
+        const delay = reduceMotion ? 0 : 38
+        const pump = async () => {
+          if (typing) return
+          typing = true
+          while (queue.length) {
+            const next = queue.shift() as string
+            assistantEl.textContent = (assistantEl.textContent || '') + next
+            messagesEl.scrollTop = messagesEl.scrollHeight
+            if (delay) await new Promise((r) => setTimeout(r, delay))
+          }
+          typing = false
+          if (queue.length) void pump()
+        }
+        const tokenize = (chunk: string): string[] => {
+          if (!chunk) return []
+          if (reduceMotion) return [chunk]
+          if (/\s/.test(chunk) || /[A-Za-z]/.test(chunk)) {
+            return chunk.match(/\S+\s*|\s+/g) ?? [chunk]
+          }
+          return Array.from(chunk)
+        }
         acc = await consumeSse(res.body, (piece) => {
           acc += piece
-          assistantEl.textContent = acc
-          messagesEl.scrollTop = messagesEl.scrollHeight
+          queue.push(...tokenize(piece))
+          void pump()
         })
+        while (queue.length || typing) {
+          await new Promise((r) => setTimeout(r, reduceMotion ? 0 : 16))
+        }
+        assistantEl.classList.remove('is-streaming')
         if (!acc) assistantEl.textContent = '(empty reply)'
       } else {
         const data = (await res.json()) as { reply?: string; message?: string; text?: string }

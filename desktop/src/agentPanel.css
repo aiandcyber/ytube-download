@@ -101,21 +101,42 @@
 .agent-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   background: #f4f7fa;
 }
 
 .agent-msg {
-  max-width: 95%;
+  max-width: min(85%, 42rem);
+  width: fit-content;
   padding: 8px 12px;
   border-radius: 10px;
   font-size: 0.9rem;
-  line-height: 1.45;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.agent-msg.is-streaming::after {
+  content: '';
+  display: inline-block;
+  width: 0.4em;
+  height: 1em;
+  margin-left: 0.1em;
+  vertical-align: -0.1em;
+  background: currentColor;
+  opacity: 0.4;
+  animation: agent-desktop-caret 0.9s steps(1) infinite;
+}
+@keyframes agent-desktop-caret {
+  50% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-msg.is-streaming::after {
+    animation: none;
+  }
 }
 
 .agent-msg.user {
