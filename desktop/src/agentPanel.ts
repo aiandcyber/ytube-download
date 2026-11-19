@@ -26,6 +26,57 @@ function langLabel(id: Lang): string {
   return LANGS.find((l) => l.id === id)?.label || id
 }
 
+/** Clear Agent direction — not one generic “unavailable” line. */
+function agentErrorFromHttp(status: number, detail: unknown): string {
+  const reason =
+    detail && typeof detail === 'object' && 'reason' in detail
+      ? String((detail as { reason?: unknown }).reason || '').trim()
+      : ''
+  const text =
+    typeof detail === 'string'
+      ? detail.trim()
+      : detail && typeof detail === 'object' && 'detail' in detail
+        ? String((detail as { detail?: unknown }).detail || '').trim()
+        : ''
+  if (status === 401 || (status === 403 && reason !== 'tool_disabled')) {
+    return 'Please sign in to use the Agent.'
+  }
+  if (status === 403 && reason === 'tool_disabled') {
+    return 'The Agent is turned off right now. Please try again later.'
+  }
+  if (status === 402) {
+    if (reason === 'daily_spend_cap') {
+      return 'You reached the daily AI limit. Try again after 24 hours, or open Compare plans for more.'
+    }
+    if (reason === 'credits_exhausted' || reason === 'balance_exhausted') {
+      return 'Your US$ balance is empty. Open Compare plans or top up to keep chatting.'
+    }
+    return 'Your free AI trial for chat is used up. Open Compare plans to subscribe or top up US$.'
+  }
+  if (status === 429) {
+    return 'Too many Agent requests. Please wait a few minutes, then try again.'
+  }
+  if (status === 0 || status === 408) {
+    return 'Could not reach the Agent. Check your connection and try again.'
+  }
+  if (status >= 500) {
+    return 'The Agent had a technical problem. Please try again in a moment.'
+  }
+  if (text && text.length < 200 && !text.startsWith('{') && !text.includes('<')) return text
+  return 'The Agent could not reply. Please try again.'
+}
+
+async function parseErrorDetail(res: Response): Promise<unknown> {
+  const raw = await res.text().catch(() => '')
+  if (!raw) return res.statusText
+  try {
+    const j = JSON.parse(raw) as { detail?: unknown }
+    return j.detail ?? j
+  } catch {
+    return raw
+  }
+}
+
 export function mountAgentPanel(opts: AgentPanelOptions): { refreshAuthHint: () => void } {
   const apiBase = (opts.toolsApiBase || DEFAULT_TOOLS_API).replace(/\/$/, '')
   let pack: LangPackState = initializeLangPacks()
@@ -187,7 +238,7 @@ export function mountAgentPanel(opts: AgentPanelOptions): { refreshAuthHint: () 
         reply = event.reply
         onDelta(event.reply)
       } else if (event.type === 'error') {
-        throw new Error(event.detail || 'Assistant error')
+        throw new Error(agentErrorFromHttp(502, event.detail || event))
       }
     }
     const consume = (chunk: string, flush: boolean) => {
@@ -217,7 +268,7 @@ export function mountAgentPanel(opts: AgentPanelOptions): { refreshAuthHint: () 
     if (!trimmed || busy) return
     const token = await opts.getAccessToken()
     if (!token) {
-      appendMsg('system', 'Sign in to use the AI agent.')
+      appendMsg('system', 'Please sign in to use the Agent.')
       return
     }
     busy = true
@@ -246,8 +297,8 @@ export function mountAgentPanel(opts: AgentPanelOptions): { refreshAuthHint: () 
         body: fd,
       })
       if (!res.ok) {
-        const errText = await res.text().catch(() => res.statusText)
-        assistantEl.textContent = `Error (${res.status}): ${errText.slice(0, 240)}`
+        const detail = await parseErrorDetail(res)
+        assistantEl.textContent = agentErrorFromHttp(res.status, detail)
         return
       }
       const ctype = res.headers.get('content-type') || ''
@@ -264,7 +315,19 @@ export function mountAgentPanel(opts: AgentPanelOptions): { refreshAuthHint: () 
         assistantEl.textContent = data.reply || data.message || data.text || JSON.stringify(data)
       }
     } catch (e) {
-      assistantEl.textContent = e instanceof Error ? e.message : String(e)
+      const msg = e instanceof Error ? e.message : String(e)
+      const lower = msg.toLowerCase()
+      if (
+        lower.includes('failed to fetch') ||
+        lower.includes('networkerror') ||
+        lower.includes('load failed')
+      ) {
+        assistantEl.textContent = 'Could not reach the Agent. Check your connection and try again.'
+      } else if (lower.includes('assistant error') || lower.includes('type": "error"')) {
+        assistantEl.textContent = 'The Agent had a technical problem. Please try again in a moment.'
+      } else {
+        assistantEl.textContent = msg.length < 220 ? msg : 'The Agent could not reply. Please try again.'
+      }
     } finally {
       busy = false
       sendBtn.disabled = false
