@@ -73,11 +73,46 @@ function renderAuth(info: AuthInfo) {
   if (btn) btn.textContent = info.signed_in ? "Sign out" : "Sign in";
 }
 
+const TOOLS_API = (import.meta.env.VITE_TOOLS_API_BASE as string | undefined)?.replace(/\/$/, "")
+  || "https://api.tools.ai-forall.org";
+
 async function refreshAuth() {
   try {
     renderAuth(await invoke<AuthInfo>("get_auth"));
   } catch {
     renderAuth({ signed_in: false, email: null });
+  }
+}
+
+async function restoreSession() {
+  try {
+    renderAuth(await invoke<AuthInfo>("restore_session"));
+  } catch {
+    await refreshAuth();
+  }
+}
+
+async function loadContactFromServer() {
+  const emailEl = document.querySelector<HTMLAnchorElement>("#contact-email");
+  const webEl = document.querySelector<HTMLAnchorElement>("#contact-website");
+  if (!emailEl || !webEl) return;
+  try {
+    const res = await fetch(`${TOOLS_API}/api/desktop/contact`);
+    if (!res.ok) throw new Error(String(res.status));
+    const data = (await res.json()) as { email?: string; website_url?: string };
+    const email = (data.email || "").trim();
+    const website = (data.website_url || "").trim();
+    if (email) {
+      emailEl.href = `mailto:${email}`;
+      emailEl.textContent = email;
+    }
+    if (website) {
+      webEl.href = website;
+      webEl.textContent = website;
+    }
+  } catch {
+    emailEl.textContent = "Unavailable";
+    webEl.textContent = "Unavailable";
   }
 }
 
@@ -241,5 +276,6 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  void refreshAuth();
+  void restoreSession();
+  void loadContactFromServer();
 });

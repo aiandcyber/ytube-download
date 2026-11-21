@@ -1,6 +1,6 @@
 [package]
 name = "ytube-download"
-version = "0.1.1"
+version = "0.1.2"
 description = "Download YouTube on your device (Windows / Mac)"
 authors = ["AI-forAll"]
 edition = "2021"

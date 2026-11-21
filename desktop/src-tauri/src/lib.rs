@@ -301,8 +301,12 @@ fn read_pipe(child: &mut Child) -> (String, String) {
 
 #[tauri::command]
 fn get_auth(auth: State<'_, AppAuth>) -> Result<AuthInfo, String> {
-    let g = auth.0.lock().map_err(|_| "Auth lock poisoned".to_string())?;
-    Ok(auth::auth_status(&g))
+    auth::ensure_access_token(&auth.0)
+}
+
+#[tauri::command]
+fn restore_session(auth: State<'_, AppAuth>) -> Result<AuthInfo, String> {
+    auth::restore_session(&auth.0)
 }
 
 #[tauri::command]
@@ -476,6 +480,7 @@ pub fn run() {
             cancel_download,
             estimate_download_size,
             get_auth,
+            restore_session,
             sign_in,
             sign_out
         ])
